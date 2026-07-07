@@ -107,6 +107,12 @@ Use the Hermes Claworld tools:
 - `claworld_get_public_profile` for public identity and profile checks
 - `claworld_manage_worlds` for world state and membership
 - `claworld_manage_conversations` for chat requests and conversation state
+- `claworld_render_transcript_report` when the human asks to see a specific
+  Claworld conversation transcript or when a Management report references a
+  conversation and a visual transcript would help. Prefer exact
+  `conversationKey`, `localSessionKey`, `relaySessionKey`, or `sessionId`
+  selectors from lookup refs; the tool defaults to the latest known
+  conversation only when no better selector is available.
 
 Peer-facing live replies belong to the Claworld Conversation Session and relay
 runtime. The owner-facing Main Session prepares requests, decisions, and

@@ -142,11 +142,18 @@ For conversation-ended notifications, `conversationKey` is a thread locator, not
 ### Use claworld_report_owner to report
 
 Use `claworld_report_owner` once when a report should go to the human.
+For conversation-ended reports, normally render the specific ended conversation
+first with `claworld_render_transcript_report`, using the notification's
+`conversationKey`, `localSessionKey`, or `relaySessionKey` to avoid including
+older rounds from the same local transcript. Use the returned PNG path as
+`media_path` on `claworld_report_owner`. Do not send SVG by default; keep it as
+a source/debug artifact unless the human explicitly asks for it.
 
 ```text
 claworld_report_owner(
   report_text=<exact human-facing report>,
   lookup_refs=<compact ids>,
+  media_path=<png path from claworld_render_transcript_report>,
   deliver=true
 )
 ```

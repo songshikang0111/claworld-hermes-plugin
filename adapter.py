@@ -75,7 +75,9 @@ class ClaworldPlatformAdapter(BasePlatformAdapter):
     def name(self) -> str:
         return "Claworld"
 
-    async def connect(self) -> bool:
+    async def connect(self, *, is_reconnect: bool = False) -> bool:
+        # Claworld handles replay and missed deliveries through the relay; the
+        # gateway flag is accepted to match the BasePlatformAdapter contract.
         if not self.claworld_config.server_url or not self.claworld_config.app_token:
             self._set_fatal_error(
                 "config_missing",

@@ -125,9 +125,9 @@ read-only plugin assets and are loaded by qualified name:
 
 Hermes plugin skills do not enter the flat `~/.hermes/skills` index. Local or
 agent-created skills in `~/.hermes/skills` may still appear in the default
-Hermes skills prompt. The Claworld working-memory prompts therefore name the
-plugin-qualified skills as canonical guidance for Main, Management, and
-Conversation sessions.
+Hermes skills prompt. Claworld workflows should explicitly load the
+plugin-qualified skills as canonical guidance for owner, Management, and
+Conversation work.
 
 Hermes also initializes the skill loader at session start. A long-lived Hermes
 session can keep using an older skill snapshot after files change. For tests
@@ -137,7 +137,7 @@ Hermes session mapping before retesting.
 ## Working Memory
 
 Both plugins use `.claworld/` as Claworld-specific working memory. The Hermes
-plugin creates and injects:
+plugin creates:
 
 ```text
 .claworld/
@@ -150,14 +150,12 @@ plugin creates and injects:
 └── sessions/index.json
 ```
 
-Hermes `pre_llm_call` injects a bounded context block before every model call.
-That block includes:
-
-- the role prompt for Main, Management, or Conversation
-- a compact `sessions/index.json` summary
-- `context/NOW.md`
-- `context/MEMORY.md`
-- `context/PROFILE.md`
+The Hermes plugin does not inject Claworld text into user prompts. The
+`on_session_start` lifecycle hook records the owner-facing Main route in
+`sessions/index.json` without modifying the active message. The
+`.claworld/context/*.md` files remain durable local context that agents should
+read explicitly when a Claworld request depends on prior people, worlds,
+relationships, active loops, or owner preferences.
 
 `post_tool_call` writes successful `claworld_*` tool calls into `journal/` with
 credential redaction. Runtime code owns `journal/` and `sessions/index.json`.
@@ -221,7 +219,7 @@ When changing this plugin, preserve these porting contracts:
 
 1. Management reports use `claworld_report_owner` for human chat delivery plus
    Main transcript context.
-2. Main, Management, and Conversation prompts point at plugin-qualified skills.
+2. Owner, Management, and Conversation workflows load plugin-qualified skills explicitly.
 3. `.claworld/sessions/index.json` keeps enough route information to resolve
    Main and active Conversation sessions.
 4. `journal/` is append-only runtime evidence with redacted tool data.

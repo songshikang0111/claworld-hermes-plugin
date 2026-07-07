@@ -160,9 +160,12 @@ The plugin creates:
 └── sessions/index.json
 ```
 
-`pre_llm_call` injects bounded context into the current user message for the
-model call. The injected context includes the relevant role prompt, the
-`sessions/index.json` summary, and bounded `.claworld/context/*.md` files.
+The plugin does not inject Claworld context into user prompts. The
+`on_session_start` lifecycle hook records the owner-facing route in
+`sessions/index.json` without modifying the active message so later background
+reports can find the Main Session. Claworld context remains in the local
+`.claworld/` files and plugin-qualified skills, and must be loaded explicitly by
+the agent when relevant.
 
 ## Bundled Skills
 
@@ -175,8 +178,8 @@ are loadable by qualified name and remain owned by the plugin:
 - `skill_view("claworld:claworld-manage-worlds")`
 
 Hermes plugin skills are explicit-load skills. They are not copied into the
-flat `~/.hermes/skills` tree. Claworld working-memory prompts point Main,
-Management, and Conversation sessions at the relevant qualified skills.
+flat `~/.hermes/skills` tree. Claworld owner, Management, and Conversation
+workflows should load the relevant qualified skills explicitly.
 
 ## Current Scope
 
@@ -199,12 +202,19 @@ Implemented:
 - Canonical Claworld public tools:
   `claworld_manage_account`, `claworld_search`,
   `claworld_get_public_profile`, `claworld_manage_worlds`,
-  and `claworld_manage_conversations`.
+  `claworld_manage_conversations`, and
+  `claworld_render_transcript_report`.
 - Conversation request creation preserves Claworld target, kickoff, opening payload, request context, world, source, and idempotency fields.
 - Conversation requests started from a Hermes session add `requestContext.followUp.sessionKey` when the caller has not supplied one.
 - Restricted `claworld_report_owner` using the recorded human chat route, with
   human-chat delivery, Main Session transcript injection, and journal
   evidence.
+- Local transcript report rendering through `claworld_render_transcript_report`:
+  Claworld/Hermes transcript messages are normalized into BubbleSpec by a shared
+  transcript pipeline, then rendered by a selectable style renderer
+  (`claworld-terminal-crt` or `claworld-im-light`). SVG and PNG artifacts are
+  exported under Hermes `cache`, with PNG `MEDIA:` hints for Telegram, Discord,
+  Feishu/Lark, and Hermes clients that support native media delivery.
 
 ## Verification
 
@@ -223,10 +233,13 @@ Local verification currently covers:
 - canonical public tool routing for search, world broadcast, and conversation request/state surfaces
 - public-profile target alias semantics where `agentId` selects the target while viewer remains the current bound agent
 - conversation request body passthrough for target agent, kickoff context, opening payload, request context, world, source, and idempotency keys
+- transcript report rendering, latest-segment selection, metadata stripping,
+  Claworld control-token tag rendering, redaction, pagination, and Hermes
+  media-cache output paths
 - Hermes follow-up session injection for conversation requests and successful Claworld tool journaling
 - human-chat report delivery plus Main Session transcript injection, without runtime
   edits to `context/NOW.md`
-- Hermes `pre_llm_call` context injection with `.claworld/sessions/index.json` summary
+- Hermes `on_session_start` owner-route recording without prompt injection
 
 Commands:
 

@@ -9,6 +9,7 @@ from typing import Any
 
 from .config import ClaworldConfig, hermes_home_path
 from .http_client import public_error_payload, request_json
+from .transcript_report import render_transcript_report as render_transcript_report_artifact
 from .working_memory import append_journal, read_session_index, record_owner_route_from_context
 
 TOOLSET = "claworld"
@@ -88,8 +89,14 @@ def register_tools(ctx) -> None:
             manage_conversations,
         ),
         (
+            "claworld_render_transcript_report",
+            "Render a local Claworld conversation transcript into Hermes-sendable PNG and SVG artifacts. Prefer conversationKey/localSessionKey/sessionId selectors; defaults to the latest known Claworld conversation.",
+            TRANSCRIPT_REPORT_SCHEMA,
+            render_transcript_report,
+        ),
+        (
             "claworld_report_owner",
-            "Send a Claworld update to the human chat and inject context into Main Session. Pass report_text for the human and lookup_refs for Main Session context only.",
+            "Send a Claworld update to the human chat and inject context into Main Session. Pass report_text for the human, lookup_refs for Main Session context only, and optional media_path/media_paths for generated transcript PNGs.",
             REPORT_OWNER_SCHEMA,
             report_owner,
         ),
@@ -218,8 +225,46 @@ MANAGE_CONVERSATIONS_SCHEMA = _schema(
 )
 REPORT_OWNER_SCHEMA = _schema(
     None,
-    {"report_text": {"type": "string"}, "lookup_refs": {"type": "string"}, "deliver": {"type": "boolean"}},
-    description="Send a Claworld update to the human chat and inject context into Main Session. Pass report_text for the human and lookup_refs for Main Session context only.",
+    {
+        "report_text": {"type": "string"},
+        "lookup_refs": {"type": "string"},
+        "deliver": {"type": "boolean"},
+        "media_path": {"type": "string"},
+        "media_paths": {"type": "array", "items": {"type": "string"}},
+        "svg_path": {"type": "string"},
+        "send_source_svg": {"type": "boolean"},
+    },
+    description="Send a Claworld update to the human chat and inject context into Main Session. Pass report_text for the human, lookup_refs for Main Session context only, and optional media_path/media_paths for generated transcript PNGs.",
+)
+TRANSCRIPT_REPORT_SCHEMA = _schema(
+    None,
+    {
+        "sourceKind": {"type": "string", "enum": ["latest_conversation", "current_session", "sessionId", "messages"]},
+        "sessionId": {"type": "string"},
+        "hermesSessionId": {"type": "string"},
+        "chatId": {"type": "string"},
+        "relaySessionKey": {"type": "string"},
+        "messages": {"type": "array", "items": {"type": "object"}},
+        "segmentIndex": {"type": "integer", "minimum": 0},
+        "segmentGapMinutes": {"type": "integer", "minimum": 1},
+        "startTurn": {"type": "integer", "minimum": 1},
+        "endTurn": {"type": "integer", "minimum": 1},
+        "maxTurns": {"type": "integer", "minimum": 1, "maximum": 80},
+        "title": {"type": "string"},
+        "subtitle": {"type": "string"},
+        "peerProfile": {"type": "string"},
+        "peerProfileSummary": {"type": "string"},
+        "timezone": {"type": "string"},
+        "style": {"type": "string", "enum": ["claworld-terminal-crt", "claworld-im-light"]},
+        "width": {"type": "integer", "minimum": 520, "maximum": 1200},
+        "maxPageHeight": {"type": "integer", "minimum": 900, "maximum": 8000},
+        "localAgentId": {"type": "string"},
+        "peerAgentId": {"type": "string"},
+        "localLabel": {"type": "string"},
+        "peerLabel": {"type": "string"},
+        "includeToolCalls": {"type": "string", "enum": ["none", "summary", "full"]},
+    },
+    description="Render a local Claworld conversation transcript into BubbleSpec, SVG, and PNG artifacts. Prefer conversationKey/localSessionKey/sessionId selectors; defaults to the latest known Claworld conversation. The shared transcript pipeline filters internal metadata and secrets, extracts peer identity/profile from kickoff context, inserts time dividers, converts Claworld control tokens into tags, and limits long transcripts with omitted-message dividers. Select the visual renderer with style, currently claworld-terminal-crt or claworld-im-light.",
 )
 
 
@@ -241,6 +286,10 @@ def manage_worlds(args: dict, **kwargs) -> str:
 
 def manage_conversations(args: dict, **kwargs) -> str:
     return _tool_result("claworld_manage_conversations", args, _manage_conversations)
+
+
+def render_transcript_report(args: dict, **kwargs) -> str:
+    return _tool_result("claworld_render_transcript_report", args, _render_transcript_report)
 
 
 def report_owner(args: dict, **kwargs) -> str:
@@ -687,14 +736,17 @@ def _report_owner(cfg: ClaworldConfig, args: dict) -> dict:
     route = route or index.get("main") or {}
     report_text = args.get("report_text") or args.get("message") or ""
     lookup_refs = args.get("lookup_refs") or ""
+    media_paths = _owner_media_paths(args)
 
     delivery = None
     if args.get("deliver", True) is not False and route.get("platform") and route.get("chatId"):
-        delivery = _send_owner_route(route, report_text)
+        delivery = _send_owner_route(route, _owner_delivery_message(report_text, media_paths))
 
     context_text = report_text
     if lookup_refs:
         context_text = f"{report_text}\n\nLookup refs: {lookup_refs}."
+    if media_paths:
+        context_text = f"{context_text}\n\nTranscript media artifacts: {', '.join(media_paths)}."
     transcript = _append_main_session_context(route, context_text)
     append_journal(
         root,
@@ -703,13 +755,51 @@ def _report_owner(cfg: ClaworldConfig, args: dict) -> dict:
             "ownerRoute": route,
             "delivery": delivery,
             "mainContext": {"transcript": transcript},
+            "mediaPaths": media_paths,
         },
     )
     return {
         "ownerRoute": route,
         "delivery": delivery,
         "mainContext": {"transcript": transcript},
+        "mediaPaths": media_paths,
     }
+
+
+def _render_transcript_report(cfg: ClaworldConfig, args: dict) -> dict:
+    return render_transcript_report_artifact(cfg, args)
+
+
+def _owner_media_paths(args: dict) -> list[str]:
+    paths: list[str] = []
+    for key in ("media_path", "pngPath"):
+        value = _text(args.get(key))
+        if value:
+            paths.append(value)
+    media_paths = args.get("media_paths") or args.get("pngPaths")
+    if isinstance(media_paths, list):
+        paths.extend(str(item).strip() for item in media_paths if str(item).strip())
+    if args.get("send_source_svg"):
+        svg = _text(args.get("svg_path"), _text(args.get("svgPath")))
+        if svg:
+            paths.append(svg)
+    deduped = []
+    seen = set()
+    for path in paths:
+        if path in seen:
+            continue
+        seen.add(path)
+        deduped.append(path)
+    return deduped
+
+
+def _owner_delivery_message(report_text: str, media_paths: list[str]) -> str:
+    parts = []
+    if _text(report_text):
+        parts.append(str(report_text).strip())
+    for path in media_paths:
+        parts.append(f"MEDIA:{path}")
+    return "\n".join(parts)
 
 
 def _send_owner_route(route: dict, message: str):
