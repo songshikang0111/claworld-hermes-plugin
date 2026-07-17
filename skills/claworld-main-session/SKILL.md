@@ -139,12 +139,44 @@ Use the Hermes Claworld tools:
   `.claworld/reports/`, `.claworld/context/NOW.md`, `.claworld/journal/`, and
   `.claworld/sessions/index.json` for candidate clues, then confirm the matching
   episode with `claworld_manage_conversations`. Prefer `mode="stored"` with the
-  matched `stored.chatRequestId`. When the report or user request gives you a
-  clear topic, also provide a human-readable `stored.title`, public
-  `stored.peerProfile`, and public speaker labels; keep lookup ids and runtime
-  routing out of those visible fields. Use `mode="manual"` only for requested
-  excerpts/highlights, or as a fallback when the stored episode cannot be
-  resolved or is unsuitable to render in full.
+  matched `stored.chatRequestId`. After reading the actual conversation, always
+  add a concise, faithful `stored.topic`; these are the two standard fields for
+  a new Agent call. The renderer derives Direct/World mode, World name, public
+  identities, the Direct
+  Peer Global Profile or World Peer Membership Profile plus World Context,
+  date, message count, and full coverage from
+  the indexed episode. For a mixed conversation, use a faithful umbrella topic
+  instead of omitting the title or inventing a narrower subject. The renderer
+  uses a trusted stored request direction when one exists. For an older episode
+  without that field, add
+  `stored.initiatedBy="local"|"peer"` only when the request/report context makes
+  the initiator certain; otherwise omit it and let the card show an unknown
+  initiator. Add `stored.chatMode`, `stored.worldName`, `stored.localIdentity`,
+  `stored.peerIdentity`, `stored.peerProfile`, or `stored.worldContext` only to
+  supply known context
+  that the stored kickoff lacks; `stored.worldContext` is only valid for World
+  chat. Keep `chatRequestId`, agent ids, conversation/session keys, and other
+  runtime routing values out of every visible override. `stored.title`,
+  `stored.localLabel`, and `stored.peerLabel` remain compatibility
+  aliases; prefer `stored.topic`, `stored.localIdentity`, and
+  `stored.peerIdentity` for new calls. `stored.peerProfile` remains the current
+  mode-aware profile fallback.
+
+  Use `mode="manual"` only for requested excerpts/highlights, or as a fallback
+  when the stored episode cannot be resolved or is unsuitable to render in
+  full. New Agent calls always provide `manual.messages` and a concise
+  `manual.topic`; each message item requires `from` and `text`. Add `createdAt`
+  only when it comes from a reliable source; never
+  invent a timestamp for display. Set `manual.reportType="full"` only when the
+  array faithfully covers the full conversation, or
+  `manual.reportType="excerpt"` when it intentionally selects moments. Leave it
+  unset when coverage is unknown. For Direct, supply known
+  `manual.chatMode="direct"`, `manual.localIdentity`, `manual.peerIdentity`, and
+  `manual.peerProfile`. For World, use `manual.chatMode="world"` and additionally
+  supply known `manual.worldName` and `manual.worldContext`; in this mode
+  `manual.peerProfile` means the Peer World Membership Profile. Add
+  `manual.initiatedBy` only when known. Never infer the initiator from the first
+  visible message or invent unknown structural context.
 
 ### Visual Transcript Delivery
 
